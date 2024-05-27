@@ -23,9 +23,14 @@ pub async fn subcribe(
     form: web::Form<FormData>,
     pool: web::Data<PgPool>,
 ) -> HttpResponse {
+    let name = match SubscriberName::parse(&form.0.name) {
+        Ok(name) => name,
+        Err(_) => return HttpResponse::BadRequest().finish(),
+    };
+
     let new_subscriber = NewSubscriber {
         email: form.email.clone(),
-        name: SubscriberName::parse(form.0.name).unwrap()
+        name,
     };
 
     match insert_subcriber(&pool, &new_subscriber).await {
