@@ -9,6 +9,9 @@
         - HttpResponse
 
 ### 설정 (configuration)
+- 기본
+- 계층적 구성
+- 환경변수
 
 ### 상태
 
