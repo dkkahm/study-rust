@@ -16,3 +16,5 @@
 
 ### Logging
 - log crate
+- tracing
+- secrecy
