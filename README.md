@@ -7,6 +7,10 @@
 - 출력
     - impl Responder
         - HttpResponse
+- 검증
+    - 타입주도개발
+
+### Test
 
 ### 설정 (configuration)
 - 기본
