@@ -11,6 +11,8 @@
     - 타입주도개발
 
 ### Test
+- mock
+- fake
 
 ### 설정 (configuration)
 - 기본

@@ -3,3 +3,6 @@ application:
 database:
   host: host.docker.internal
   require_ssl: false
+email_client:
+  base_url: "https://api.postmarkapp.com"
+  sender_email: "dk.kam@tg360tech.com"

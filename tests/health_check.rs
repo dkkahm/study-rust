@@ -1,9 +1,10 @@
 use std::net::TcpListener;
 
+use actix_web::rt::time;
 use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
-use zero2prod::{configuration::{get_configuration, DatabaseSettings}, startup::run, telemetry::{get_subscriber, init_subscriber}};
+use zero2prod::{configuration::{get_configuration, DatabaseSettings}, email_client::EmailClient, startup::run, telemetry::{get_subscriber, init_subscriber}};
 
 #[tokio::test]
 async fn health_check_works() {
@@ -129,8 +130,18 @@ async fn spawn_app() -> TestApp {
     let mut configuration = get_configuration().expect("Failed to read configuration.");
     configuration.database.database_name = Uuid::new_v4().to_string();
     let connection_pool = configure_database(&configuration.database).await;
+
+    let sender_email = configuration.email_client.sender()
+        .expect("Invalid sender email address.");
+    let timeout = configuration.email_client.timeout();
+    let email_client = EmailClient::new(
+        configuration.email_client.base_url,
+        sender_email,
+        configuration.email_client.authorization_token,
+        timeout,
+    );
     
-    let server = run(listener, connection_pool.clone()).await.expect("Failed to bind");
+    let server = run(listener, connection_pool.clone(), email_client).await.expect("Failed to bind");
     let _ = tokio::spawn(server);
 
     TestApp {
