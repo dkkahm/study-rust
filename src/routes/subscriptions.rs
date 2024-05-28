@@ -3,7 +3,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 use chrono::Utc;
 
-use crate::{domain::NewSubscriber, email_client::EmailClient};
+use crate::{domain::NewSubscriber, email_client::EmailClient, startup::ApplicationBaseUrl};
 
 #[derive(serde::Deserialize)]
 pub struct FormData {
@@ -13,7 +13,7 @@ pub struct FormData {
 
 #[tracing::instrument(
     name = "Adding a new subscriber",
-    skip(form, pool, email_client),
+    skip(form, pool, email_client, base_url),
     fields(
         subscriber_email = %form.email,
         subscriber_name = %form.name
@@ -23,6 +23,7 @@ pub async fn subcribe(
     form: web::Form<FormData>,
     pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
+    base_url: web::Data<ApplicationBaseUrl>,
 ) -> HttpResponse {
     let new_subscriber = match form.0.try_into() {
         Ok(form) => form,
@@ -32,7 +33,11 @@ pub async fn subcribe(
         return HttpResponse::InternalServerError().finish();
     }
 
-    if send_confirmation_email(&email_client, new_subscriber)
+    if send_confirmation_email(
+        &email_client,
+        new_subscriber,
+        &base_url.0,
+    )
     .await
     .is_err() {
         return HttpResponse::InternalServerError().finish();
@@ -70,13 +75,14 @@ pub async fn insert_subcriber(
 
 #[tracing::instrument(
     name = "Send a confirmation email to a new subscriber",
-    skip(email_client, new_subscriber)
+    skip(email_client, new_subscriber, base_url)
 )]
 pub async fn send_confirmation_email(
     email_client: &EmailClient,
     new_subscriber: NewSubscriber,
+    base_url: &str,
 ) -> Result<(), reqwest::Error> {
-    let confirmation_link = "https://my-api.com/subscriptions/confirm";
+    let confirmation_link = format!("{}/subscriptions/confirm?subscription_token=mytoken", base_url);
     let plain_body = format!(
         "Welcome to our newsletter!\nVisit {} to confirm your subscription.",
         confirmation_link

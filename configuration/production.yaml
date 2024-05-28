@@ -1,5 +1,6 @@
 application:
   host: 0.0.0.0
+  # base_url: env value from APP_APPLICATION__BASE_URL
 database:
   host: host.docker.internal
   require_ssl: false
