@@ -1,4 +1,3 @@
-use config::builder;
 use reqwest::Client;
 use secrecy::{ExposeSecret, Secret};
 
@@ -38,21 +37,6 @@ impl EmailClient {
         html_content: &str,
         text_content: &str,
     ) -> Result<(), reqwest::Error> {
-        // let url = format!("{}/email", self.sender.as_ref());
-        // let request_body = SendEmailRequest {
-        //     from: self.sender.as_ref(),
-        //     to: recipient.as_ref(),
-        //     subject,
-        //     html_body: html_content,
-        //     text_body: text_content
-        // };
-        // let client = reqwest::Client::new();
-        // client.post(&url)
-        //     .json(&request_body)
-        //     .send()
-        //     .await?
-        //     .error_for_status()?;
-
         let url = format!("{}/email", self.base_url);
         let request_body = SendEmailRequest {
             from : self.sender.as_ref(),
@@ -135,7 +119,6 @@ mod tests {
     #[tokio::test]
     async fn send_email_sends_the_expected_request() {
         let mock_server = MockServer::start().await;
-        let sender = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
         let email_client = email_client(mock_server.uri());
 
         Mock::given(header_exists("X-Postmark-Server-Token"))
@@ -156,7 +139,6 @@ mod tests {
     #[tokio::test]
     async fn send_email_succeeds_if_the_server_returns_200() {
         let mock_server = MockServer::start().await;
-        let sender = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
         let email_client = email_client(mock_server.uri());
 
         Mock::given(any())
@@ -175,7 +157,6 @@ mod tests {
     #[tokio::test]
     async fn send_email_fails_if_the_server_returns_500() {
         let mock_server = MockServer::start().await;
-        let sender = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
         let email_client = email_client(mock_server.uri());
 
         Mock::given(any())
@@ -194,7 +175,6 @@ mod tests {
     #[tokio::test]
     async fn send_email_times_out_if_the_server_takes_too_long() {
         let mock_server = MockServer::start().await;
-        let sender = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
         let email_client = email_client(mock_server.uri());
 
         let response = ResponseTemplate::new(200)
