@@ -4,11 +4,12 @@
     - Query
     - Body
     - ...
+    - 검증
+        - 타입주도개발
+    - 살균
 - 출력
     - impl Responder
         - HttpResponse
-- 검증
-    - 타입주도개발
 
 ### Test
 - mock
@@ -22,8 +23,11 @@
 ### 상태
 
 ### Database
+- transaction
 
 ### Logging
 - log crate
 - tracing
 - secrecy
+
+### 오류핸들링
