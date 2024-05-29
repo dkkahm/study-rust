@@ -1,6 +1,5 @@
 use actix_web::{http::StatusCode, web, HttpResponse, ResponseError};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use reqwest::Response;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 use chrono::Utc;
@@ -28,18 +27,19 @@ pub async fn subcribe(
     base_url: web::Data<ApplicationBaseUrl>,
 ) -> Result<HttpResponse, SubscribeError> {
     let new_subscriber = form.0.try_into()?;
-    let mut transaction = pool.begin().await.map_err(SubscribeError::PoolError)?;
-    let subscriber_id = insert_subcriber(&mut transaction, &new_subscriber).await.map_err(SubscribeError::InsertSubscriberError)?;
+    let mut transaction = pool.begin().await.map_err(|e| SubscribeError::UnexpectedError(Box::new(e)))?;
+    let subscriber_id = insert_subcriber(&mut transaction, &new_subscriber).await.map_err(|e| SubscribeError::UnexpectedError(Box::new(e)))?;
     let subscriber_token = generate_subscription_token();
-    store_token(&mut transaction, subscriber_id, &subscriber_token).await?;
-    transaction.commit().await.map_err(SubscribeError::TransactionCommitError)?;
+    store_token(&mut transaction, subscriber_id, &subscriber_token).await.map_err(|e| SubscribeError::UnexpectedError(Box::new(e)))?;
+    transaction.commit().await.map_err(|e| SubscribeError::UnexpectedError(Box::new(e)))?;
     send_confirmation_email(
         &email_client,
         new_subscriber,
         &base_url.0,
         &subscriber_token,
     )
-    .await?;
+    .await
+    .map_err(|e| SubscribeError::UnexpectedError(Box::new(e)))?;
     Ok(HttpResponse::Ok().finish())
 }
 
@@ -137,21 +137,19 @@ fn generate_subscription_token() -> String {
         .collect()
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum SubscribeError {
+    #[error("{0}")]
     ValidationError(String),
-    PoolError(sqlx::Error),
-    InsertSubscriberError(sqlx::Error),
-    TransactionCommitError(sqlx::Error),
-    StoreTokenError(StoreTokenError),
-    SendEmailError(reqwest::Error),
+    #[error(transparent)]
+    UnexpectedError(#[from] Box<dyn std::error::Error>),
 }
 
-impl std::fmt::Display for SubscribeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Failed to create a new subscriber")
-    }
-}
+// impl std::fmt::Display for SubscribeError {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "Failed to create a new subscriber")
+//     }
+// }
 
 // impl std::error::Error for SubscribeError {}
 
@@ -159,26 +157,22 @@ impl ResponseError for SubscribeError {
     fn status_code(&self) -> StatusCode {
         match self {
             SubscribeError::ValidationError(_) => StatusCode::BAD_REQUEST,
-            SubscribeError::PoolError(_)
-            | SubscribeError::InsertSubscriberError(_)
-            | SubscribeError::TransactionCommitError(_)
-            | SubscribeError::StoreTokenError(_)
-            | SubscribeError::SendEmailError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            SubscribeError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
 
-impl From<reqwest::Error> for SubscribeError {
-    fn from(e: reqwest::Error) -> Self {
-        Self::SendEmailError(e)
-    }
-}
+// impl From<reqwest::Error> for SubscribeError {
+//     fn from(e: reqwest::Error) -> Self {
+//         Self::SendEmailError(e)
+//     }
+// }
 
-impl From<StoreTokenError> for SubscribeError {
-    fn from(e: StoreTokenError) -> Self {
-        Self::StoreTokenError(e)
-    }
-}
+// impl From<StoreTokenError> for SubscribeError {
+//     fn from(e: StoreTokenError) -> Self {
+//         Self::StoreTokenError(e)
+//     }
+// }
 
 impl From<String> for SubscribeError {
     fn from(e: String) -> Self {
@@ -189,15 +183,15 @@ impl From<String> for SubscribeError {
 #[derive(Debug)]
 pub struct StoreTokenError(sqlx::Error);
 
-// impl std::fmt::Display for StoreTokenError {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(
-//             f,
-//             "A database error was encountered while \
-//             trying to store a subscription token."
-//         )
-//     }
-// }
+impl std::fmt::Display for StoreTokenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "A database error was encountered while \
+            trying to store a subscription token."
+        )
+    }
+}
 
 // impl std::fmt::Debug for StoreTokenError {
 //     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -205,11 +199,11 @@ pub struct StoreTokenError(sqlx::Error);
 //     }
 // }
 
-// impl std::error::Error for StoreTokenError {
-//     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-//         Some(&self.0)
-//     }
-// }
+impl std::error::Error for StoreTokenError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.0)
+    }
+}
 
 // fn error_chain_fmt(
 //     e: &impl std::error::Error,
