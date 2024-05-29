@@ -31,4 +31,5 @@
 - secrecy
 
 ### 오류핸들링
-- error chaining
+- 불투명한 오류
+- thiserror, anyhow

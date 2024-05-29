@@ -3,6 +3,7 @@ use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 use chrono::Utc;
+use anyhow::Context;
 
 use crate::{domain::NewSubscriber, email_client::EmailClient, startup::ApplicationBaseUrl};
 
@@ -27,11 +28,15 @@ pub async fn subcribe(
     base_url: web::Data<ApplicationBaseUrl>,
 ) -> Result<HttpResponse, SubscribeError> {
     let new_subscriber = form.0.try_into()?;
-    let mut transaction = pool.begin().await.map_err(|e| SubscribeError::UnexpectedError(Box::new(e)))?;
-    let subscriber_id = insert_subcriber(&mut transaction, &new_subscriber).await.map_err(|e| SubscribeError::UnexpectedError(Box::new(e)))?;
+    let mut transaction = pool.begin().await
+        .context("Failed to acquire a Postgres connection from the pool")?;
+    let subscriber_id = insert_subcriber(&mut transaction, &new_subscriber).await
+        .context("Failed to insert new subscriber in the database")?;
     let subscriber_token = generate_subscription_token();
-    store_token(&mut transaction, subscriber_id, &subscriber_token).await.map_err(|e| SubscribeError::UnexpectedError(Box::new(e)))?;
-    transaction.commit().await.map_err(|e| SubscribeError::UnexpectedError(Box::new(e)))?;
+    store_token(&mut transaction, subscriber_id, &subscriber_token).await
+        .context("Failed to store the confirmation token for a new subscriber")?;
+    transaction.commit().await
+        .context("Failed to commit SQL transaction to store a new subscriber")?;
     send_confirmation_email(
         &email_client,
         new_subscriber,
@@ -39,7 +44,7 @@ pub async fn subcribe(
         &subscriber_token,
     )
     .await
-    .map_err(|e| SubscribeError::UnexpectedError(Box::new(e)))?;
+    .context("Failed to send a confirmation email")?;
     Ok(HttpResponse::Ok().finish())
 }
 
@@ -142,7 +147,7 @@ pub enum SubscribeError {
     #[error("{0}")]
     ValidationError(String),
     #[error(transparent)]
-    UnexpectedError(#[from] Box<dyn std::error::Error>),
+    UnexpectedError(#[from] anyhow::Error),
 }
 
 // impl std::fmt::Display for SubscribeError {
