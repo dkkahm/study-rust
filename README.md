@@ -31,3 +31,4 @@
 - secrecy
 
 ### 오류핸들링
+- error chaining
