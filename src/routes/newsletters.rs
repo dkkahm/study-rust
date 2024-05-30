@@ -150,7 +150,7 @@ async fn validate_credentials(
 ) -> Result<uuid::Uuid, PublishError> {
     let row: Option<_> = sqlx::query!(
             r#"
-            SELECT user_id, password_hash, salt
+            SELECT user_id, password_hash
             FROM users
             WHERE username = $1
             "#,
@@ -161,25 +161,22 @@ async fn validate_credentials(
         .context("Failed to perform a query to retrieve stored credentials.")
         .map_err(PublishError::UnexpectedError)?;
 
-    let (expected_password_hash, user_id, salt) = match row {
-        Some(row) => (row.password_hash, row.user_id, row.salt),
+    let (expected_password_hash, user_id) = match row {
+        Some(row) => (row.password_hash, row.user_id),
         None => return Err(PublishError::AuthError(anyhow::anyhow!("Invalid credentials"))),
     };
 
-    let argon2 = Argon2::default();
-    let salt = SaltString::from_b64(&salt)
-        .context("Failed to parse the base64 encoded salt.")
-        .map_err(PublishError::UnexpectedError)?;
-    let password_hash = argon2.hash_password(
-            credentials.password.expose_secret().as_bytes(),
-            &salt,
-        )
-        .context("Failed to hash password")
-        .map_err(PublishError::UnexpectedError)?;
+    let expected_password_hash = PasswordHash::new(&expected_password_hash)
+        .context("Failed to parse hash in PHC string format.")
+        .map_err(PublishError::AuthError)?;
 
-    if password_hash.to_string() != expected_password_hash {
-        Err(PublishError::AuthError(anyhow::anyhow!("Invalid credentials")))
-    } else {
-        Ok(user_id)
-    }
+
+    Argon2::default()
+        .verify_password(
+            credentials.password.expose_secret().as_bytes(), &expected_password_hash
+        )
+        .context("Invalid password.")
+        .map_err(PublishError::AuthError)?;
+
+    Ok(user_id)
 }
