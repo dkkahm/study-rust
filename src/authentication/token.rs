@@ -1,3 +1,4 @@
+use actix_web::body::MessageBody;
 use aes::Aes256;
 use block_modes::{BlockMode, Cbc, block_padding::Pkcs7};
 use rand::Rng;
@@ -14,73 +15,57 @@ fn generate_token_salt() -> [u8; 16] {
     key
 }
 
-// pub fn encode_token(claim: &str) -> Result<String, anyhow::Error> {
-//     let mut token = claim.to_string();
+pub fn encode_token(claim: &str) -> Result<String, anyhow::Error> {
+    let mut token = claim.to_string();
 
-//     let token_secret = get_configuration()
-//         .map_err(|e| anyhow::anyhow!("{}", e))?
-//         .application.token_secret;
+    let token_secret = get_configuration()
+        .map_err(|e| anyhow::anyhow!("{}", e))?
+        .application.token_secret;
 
-//     let token_salt = generate_token_salt();
+    let token_salt = generate_token_salt();
+    let encrypted_salt = encrypt_message_aes256(&hex::encode(token_salt), &token_secret)?;
+    token.push(':');
+    token.push_str(&encrypted_salt);
 
-//     let mut key_buffer: Vec<u8> = token_salt.to_vec();
-//     let mut stream = Aes256Ctr::new(cipher.clone(), &[0u8; 16]);
-//     stream.apply_keystream(&mut key_buffer);
+    // hash token with sha3_256, result shoud be String
+    let mut hasher = Sha3_256::new();
+    hasher.update(token.as_bytes());
+    let hash = hasher.finalize();
+    let hash = hex::encode(hash);
+    token.push(':');
+    token.push_str(&hash);
+    
+    Ok(token)
+}
 
-//     token.push(':');
-//     token.push(format!("{:x}", key_buffer));
+pub fn get_claim_from_token(token: &str) -> Result<String, anyhow::Error> {
+    let mut token_parts = token.rsplitn(2, ':');
+    let hash_in_token = token_parts.next().ok_or_else(|| anyhow::anyhow!("Invalid token format"))?;
+    let claim_and_salt_in_token = token_parts.next().ok_or_else(|| anyhow::anyhow!("Invalid token format"))?;
 
-//     let mut hasher = Sha3_256::new();
-//     hasher.update(token.as_bytes());
-//     let hash = hasher.finalize();
-//     let hash = format!("{:x}", hash);
+    let mut hasher = Sha3_256::new();
+    hasher.update(claim_and_salt_in_token.as_bytes());
+    let hash = hasher.finalize();
+    let expected_hash = hex::encode(hash);
 
-//     token.push(':');
-//     token.push(hash);
+    if hash_in_token != expected_hash {
+        return Err(anyhow::anyhow!("Invalid token hash"));
+    }
 
-//     Ok(token)
-// }
+    let mut claim_and_salt_parts_in_token = claim_and_salt_in_token.split(':');
+    let claim_in_token = claim_and_salt_parts_in_token.next().ok_or_else(|| anyhow::anyhow!("Invalid token format"))?;
+    let salt_in_token = claim_and_salt_parts_in_token.next().ok_or_else(|| anyhow::anyhow!("Invalid token format"))?;
 
-// pub fn get_claim_from_token(token: &str) -> Result<String, anyhow::Error> {
-//     let token_parts = token.rsplitn(2, ':');
-//     let claim_and_salt_in_token = token_parts.next().or_else(|| anyhow::anyhow!("Invalid token format"))?;
-//     let hash_in_token = token_parts.next().or_else(|| anyhow::anyhow!("Invalid token format"))?;
+    let token_secret = get_configuration()
+        .map_err(|e| anyhow::anyhow!("{}", e))?
+        .application.token_secret;
 
-//     let mut hasher = Sha3_256::new();
-//     hasher.update(claim_and_salt_in_token.as_bytes());
-//     let hash = hasher.finalize();
-//     let expected_hash = format!("{:x}", hash);
+    decrypt_message_aes256(&salt_in_token, &token_secret)?;
 
-//     if hash_in_token != expected_hash {
-//         return anyhow::anyhow!("Invalid token hash");
-//     }
+    Ok(claim_in_token.to_string())
+}
 
-//     let claim_and_salt_parts_in_token = claim_and_salt_in_token.split(':');
-//     let claim_in_token = claim_and_salt_parts_in_token.next().or_else(|| anyhow::anyhow!("Invalid token format"))?;
-//     let salt_in_token = claim_and_salt_parts_in_token.next().or_else(|| anyhow::anyhow!("Invalid token format"))?;
-
-//     let token_secret = get_configuration()
-//         .map_err(|e| anyhow::anyhow!("{}", e))?
-//         .application.token_secret;
-
-//     let cipher = match Aes256::new_from_slice(token_secret.as_bytes()) {
-//         Ok(cipher) => cipher,
-//         Err(e) => anyhow::Error(e),
-//     };
-
-//     let mut buffer = salt_in_token.as_bytes().to_vec();
-//     let mut stream = Aes256Ctr::new(cipher, &[0u8; 16]);
-
-//     stream.apply_keystream(&mut buffer);
-
-//     if let Err(e) = String::from_utf8(buffer) {
-//         return anyhow::Error(e);
-//     }
-
-//     Ok(claim.to_string())
-// }
-
-fn encrypt_message(message: &str, password: &str) -> Result<String, anyhow::Error> {
+fn encrypt_message_aes256(message: &str, password: &str) -> Result<String, anyhow::Error> {
     let password = password.as_bytes();
 
     // Generate a random IV
@@ -100,7 +85,7 @@ fn encrypt_message(message: &str, password: &str) -> Result<String, anyhow::Erro
     Ok(hex::encode(result))
 }
 
-fn decrypt_message(ciphertext: &str, password: &str) -> Result<String, anyhow::Error> {
+fn decrypt_message_aes256(ciphertext: &str, password: &str) -> Result<String, anyhow::Error> {
     if ciphertext.len() < IV_SIZE {
         return Err(anyhow::anyhow!("Invalid ciphertext length"));
     }
@@ -135,10 +120,21 @@ mod tests {
     fn test_encypt_and_decrypt() {
         let claim = "test";
         let password = "0123456789abcdef0123456789abcdef";
-        let encypted_message = encrypt_message(claim, password).unwrap();
-        let decrypted_message = decrypt_message(&encypted_message, password).unwrap();
+        let encypted_message = encrypt_message_aes256(claim, password).unwrap();
+        let decrypted_message = decrypt_message_aes256(&encypted_message, password).unwrap();
         
         // Assert
         assert_eq!(claim.to_string(), decrypted_message);
     }
+
+
+    #[test]
+    fn test_encode_and_decode_token() {
+        let claim = "test";
+        let token = encode_token(&claim).unwrap();
+        let claim_in_token = get_claim_from_token(&token).unwrap();
+
+        // Assert
+        assert_eq!(claim, claim_in_token);
+    }    
 }

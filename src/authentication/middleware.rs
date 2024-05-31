@@ -10,6 +10,7 @@ use base64::prelude::*;
 use secrecy::Secret;
 use uuid::Uuid;
 
+use super::token::get_claim_from_token;
 use super::Credentials;
 
 #[derive(Copy, Clone, Debug)]
@@ -29,29 +30,34 @@ impl Deref for UserId {
     }
 }
 
-// pub async fn reject_anonymous_users(
-//     mut req: ServiceRequest,
-//     next: Next<impl MessageBody>,
-// ) -> Result<ServiceResponse<impl MessageBody>, actix_web::Error> {
-//     let (http_request, payload) = req.parts_mut();
+pub async fn reject_anonymous_users(
+    mut req: ServiceRequest,
+    next: Next<impl MessageBody>,
+) -> Result<ServiceResponse<impl MessageBody>, actix_web::Error> {
+    let (http_request, payload) = req.parts_mut();
 
-//     match get_user_id_from_auth_token(http_request.headers()) {
-//         Ok(user_id) => {
-//             match user_id {
-//                 Some(user_id) => {
-//                     req.extensions_mut().insert(UserId(user_id));
-//                     next.call(req).await
-//                 }
-//                 None => {
-//                     Err(actix_web::error::ErrorUnauthorized("Authentication failed"))
-//                 }
-//             }
-//         }
-//         Err(err) => {
-//             Err(actix_web::error::ErrorUnauthorized(err))
-//         }
-//     }
-// }
+    // println!("### reject_anonymous_users >>>");
+    match get_user_id_from_auth_token(http_request.headers()) {
+        Ok(user_id) => {
+            // println!("### reject_anonymous_users, 1. user_id = {:?}", user_id);
+            match user_id {
+                Some(user_id) => {
+                    // println!("### reject_anonymous_users, 2. user_id = {:?}", user_id);
+                    req.extensions_mut().insert(UserId(user_id));
+                    next.call(req).await
+                }
+                None => {
+                    // println!("### reject_anonymous_users, 3");
+                    Err(actix_web::error::ErrorUnauthorized("Authentication failed"))
+                }
+            }
+        }
+        Err(err) => {
+            // println!("### reject_anonymous_users, 4");
+            Err(actix_web::error::ErrorUnauthorized(err))
+        }
+    }
+}
 
 pub fn basic_authentication(headers: &HeaderMap) -> Result<Option<Credentials>, anyhow::Error> {
     let header_value = match headers.get("Authorization") {
@@ -85,17 +91,27 @@ pub fn basic_authentication(headers: &HeaderMap) -> Result<Option<Credentials>, 
     }))
 }
 
-// fn get_user_id_from_auth_token(headers: &HeaderMap) -> Result<Option<Uuid>, anyhow::Error> {
-//     let header_value = match headers.get("Authorization") {
-//         None => return Ok(None),
-//         Some(header_value) => header_value
-//     };
+fn get_user_id_from_auth_token(headers: &HeaderMap) -> Result<Option<Uuid>, anyhow::Error> {
+    // println!("### get_user_id_from_auth_token >>>");
+    let header_value = match headers.get("Authorization") {
+        None => return Ok(None),
+        Some(header_value) => header_value
+    };
+    // println!("### get_user_id_from_auth_token: header_value = {:?}", header_value);
 
-//     let header_value = header_value.to_str()
-//         .context("The 'Authorization' header was not a valid UTF8 string.")?;
-//     let token_segment = header_value
-//         .strip_prefix("Bearer ")
-//         .context("The authorization scheme was not 'Bearer'.")?;
+    let header_value = header_value.to_str()
+        .context("The 'Authorization' header was not a valid UTF8 string.")?;
+    // println!("### get_user_id_from_auth_token: header_value = {:?}", header_value);
+    let token_segment = header_value
+        .strip_prefix("Bearer ")
+        .context("The authorization scheme was not 'Bearer'.")?;
+    // println!("### get_user_id_from_auth_token: token_segment = {:?}", token_segment);
 
-//     Ok(Some(token_segment.to_string()))
-// }
+    let user_id_in_string = get_claim_from_token(&token_segment)?;
+    // println!("### get_user_id_from_auth_token: user_id_in_string = {:?}", user_id_in_string);
+
+    let user_id = Uuid::parse_str(&user_id_in_string)?;
+    // println!("### get_user_id_from_auth_token: user_id = {:?}", user_id);
+
+    Ok(Some(user_id))
+}

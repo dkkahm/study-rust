@@ -3,7 +3,7 @@ use secrecy::{ExposeSecret, Secret};
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use wiremock::MockServer;
-use zero2prod::{authentication::password::compute_password_hash, configuration::{get_configuration, DatabaseSettings}, startup::{get_connection_pool, Application}, telemetry::{get_subscriber, init_subscriber}};
+use zero2prod::{authentication::{password::compute_password_hash, token::encode_token}, configuration::{get_configuration, DatabaseSettings}, startup::{get_connection_pool, Application}, telemetry::{get_subscriber, init_subscriber}};
 use argon2::{
     password_hash::{
         PasswordHasher, SaltString
@@ -107,6 +107,17 @@ impl TestApp {
             .post(&format!("{}/newsletters", &self.address))
             .basic_auth(&self.test_user.username, Some(&self.test_user.password))
             .json(&body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn get_token(&self) -> reqwest::Response {
+        let token: String = encode_token(&self.test_user.user_id.to_string()).unwrap();
+
+        reqwest::Client::new()
+            .get(&format!("{}/token/test", &self.address))
+            .bearer_auth(token)
             .send()
             .await
             .expect("Failed to execute request.")

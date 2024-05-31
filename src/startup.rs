@@ -1,12 +1,14 @@
 use std::net::TcpListener;
 
 use actix_web::{dev::Server, web, App, HttpServer};
+use actix_web_lab::middleware::from_fn;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use tracing_actix_web::TracingLogger;
+use crate::authentication::middleware::reject_anonymous_users;
 use crate::configuration::{DatabaseSettings, Settings};
 use crate::email_client::EmailClient;
-use crate::routes::{health_check, publish_newsletter};
+use crate::routes::{health_check, publish_newsletter, token_test};
 use crate::routes::subcribe;
 use crate::routes::confirm;
 
@@ -73,6 +75,11 @@ pub fn run(
             .route("/subscriptions", web::post().to(subcribe))
             .route("/subscriptions/confirm", web::get().to(confirm))
             .route("/newsletters", web::post().to(publish_newsletter))
+            .service(
+                web::scope("/token")
+                    .wrap(from_fn(reject_anonymous_users))
+                    .route("/test", web::get().to(token_test))
+            )
             .app_data(db_pool.clone())
             .app_data(email_client.clone())
             .app_data(base_url.clone())
