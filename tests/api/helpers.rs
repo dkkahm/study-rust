@@ -1,8 +1,9 @@
 use once_cell::sync::Lazy;
+use secrecy::{ExposeSecret, Secret};
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use wiremock::MockServer;
-use zero2prod::{configuration::{get_configuration, DatabaseSettings}, startup::{get_connection_pool, Application}, telemetry::{get_subscriber, init_subscriber}};
+use zero2prod::{authentication::password::compute_password_hash, configuration::{get_configuration, DatabaseSettings}, startup::{get_connection_pool, Application}, telemetry::{get_subscriber, init_subscriber}};
 use argon2::{
     password_hash::{
         PasswordHasher, SaltString
@@ -45,18 +46,15 @@ impl TestUser {
     }
 
     async fn store(&self, pool: &PgPool) {
-        let salt = SaltString::generate(&mut rand::thread_rng());
-        let password_hash = Argon2::default()
-            .hash_password(self.password.as_bytes(), &salt)
-            .unwrap()
-            .to_string();
+        let password_hash = compute_password_hash(&Secret::new(self.password.clone()))
+            .expect("Failed to hash password");
 
         sqlx::query!(
                 "INSERT INTO users (user_id, username, password_hash)
                 VALUES ($1, $2, $3)",
                 self.user_id,
                 self.username,
-                password_hash,
+                password_hash.expose_secret(),
             )
             .execute(pool)
             .await
