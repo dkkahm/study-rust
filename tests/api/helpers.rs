@@ -1,16 +1,18 @@
+use argon2::{
+    password_hash::{PasswordHasher, SaltString},
+    Argon2,
+};
 use once_cell::sync::Lazy;
 use secrecy::{ExposeSecret, Secret};
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use wiremock::MockServer;
-use zero2prod::{authentication::{password::compute_password_hash, token::encode_token}, configuration::{get_configuration, DatabaseSettings}, startup::{get_connection_pool, Application}, telemetry::{get_subscriber, init_subscriber}};
-use argon2::{
-    password_hash::{
-        PasswordHasher, SaltString
-    },
-    Argon2
+use zero2prod::{
+    authentication::{password::compute_password_hash, token::encode_token},
+    configuration::{get_configuration, DatabaseSettings},
+    startup::{get_connection_pool, Application},
+    telemetry::{get_subscriber, init_subscriber},
 };
-
 
 static TRACING: Lazy<()> = Lazy::new(|| {
     let default_filter_level = "info".to_string();
@@ -50,15 +52,15 @@ impl TestUser {
             .expect("Failed to hash password");
 
         sqlx::query!(
-                "INSERT INTO users (user_id, username, password_hash)
+            "INSERT INTO users (user_id, username, password_hash)
                 VALUES ($1, $2, $3)",
-                self.user_id,
-                self.username,
-                password_hash.expose_secret(),
-            )
-            .execute(pool)
-            .await
-            .expect("Failed to store test user");
+            self.user_id,
+            self.username,
+            password_hash.expose_secret(),
+        )
+        .execute(pool)
+        .await
+        .expect("Failed to store test user");
     }
 }
 

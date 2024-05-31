@@ -10,5 +10,8 @@ async fn test_token() {
     let response = app.get_token().await;
 
     assert_eq!(response.status().as_u16(), 200);
-    assert_eq!(response.text().await.unwrap(), app.test_user.user_id.to_string());
+    assert_eq!(
+        response.text().await.unwrap(),
+        app.test_user.user_id.to_string()
+    );
 }

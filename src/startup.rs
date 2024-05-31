@@ -1,16 +1,16 @@
 use std::net::TcpListener;
 
+use crate::authentication::middleware::reject_anonymous_users;
+use crate::configuration::{DatabaseSettings, Settings};
+use crate::email_client::EmailClient;
+use crate::routes::confirm;
+use crate::routes::subcribe;
+use crate::routes::{health_check, publish_newsletter, token_test};
 use actix_web::{dev::Server, web, App, HttpServer};
 use actix_web_lab::middleware::from_fn;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use tracing_actix_web::TracingLogger;
-use crate::authentication::middleware::reject_anonymous_users;
-use crate::configuration::{DatabaseSettings, Settings};
-use crate::email_client::EmailClient;
-use crate::routes::{health_check, publish_newsletter, token_test};
-use crate::routes::subcribe;
-use crate::routes::confirm;
 
 pub struct Application {
     port: u16,
@@ -20,7 +20,9 @@ pub struct Application {
 impl Application {
     pub async fn build(configuration: Settings) -> Result<Self, std::io::Error> {
         let connection_pool = get_connection_pool(&configuration.database);
-        let sender_email = configuration.email_client.sender()
+        let sender_email = configuration
+            .email_client
+            .sender()
             .expect("Invalid sender email address");
         let timeout = configuration.email_client.timeout();
         let email_client = EmailClient::new(
@@ -29,7 +31,10 @@ impl Application {
             configuration.email_client.authorization_token,
             timeout,
         );
-        let address = format!("{}:{}", configuration.application.host, configuration.application.port);
+        let address = format!(
+            "{}:{}",
+            configuration.application.host, configuration.application.port
+        );
         let listener = TcpListener::bind(address)?;
         let port = listener.local_addr().unwrap().port();
         let server = run(
@@ -78,7 +83,7 @@ pub fn run(
             .service(
                 web::scope("/token")
                     .wrap(from_fn(reject_anonymous_users))
-                    .route("/test", web::get().to(token_test))
+                    .route("/test", web::get().to(token_test)),
             )
             .app_data(db_pool.clone())
             .app_data(email_client.clone())

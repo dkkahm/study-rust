@@ -3,7 +3,10 @@ use std::ops::Deref;
 use actix_web::http::header::HeaderMap;
 
 use actix_web::HttpMessage;
-use actix_web::{body::MessageBody, dev::{ServiceRequest, ServiceResponse}};
+use actix_web::{
+    body::MessageBody,
+    dev::{ServiceRequest, ServiceResponse},
+};
 use actix_web_lab::middleware::Next;
 use anyhow::Context;
 use base64::prelude::*;
@@ -62,15 +65,17 @@ pub async fn reject_anonymous_users(
 pub fn basic_authentication(headers: &HeaderMap) -> Result<Option<Credentials>, anyhow::Error> {
     let header_value = match headers.get("Authorization") {
         None => return Ok(None),
-        Some(header_value) => header_value
+        Some(header_value) => header_value,
     };
 
-    let header_value = header_value.to_str()
+    let header_value = header_value
+        .to_str()
         .context("The 'Authorization' header was not a valid UTF8 string.")?;
     let base64encoded_segment = header_value
         .strip_prefix("Basic ")
         .context("The authorization scheme was not 'Basic'.")?;
-    let decoded_bytes = BASE64_STANDARD.decode(base64encoded_segment)
+    let decoded_bytes = BASE64_STANDARD
+        .decode(base64encoded_segment)
         .context("Failed to base64-decode 'Basic' credentials.")?;
     let decoded_credentials = String::from_utf8(decoded_bytes)
         .context("The decoded credential string is not valid UTF8.")?;
@@ -95,11 +100,12 @@ fn get_user_id_from_auth_token(headers: &HeaderMap) -> Result<Option<Uuid>, anyh
     // println!("### get_user_id_from_auth_token >>>");
     let header_value = match headers.get("Authorization") {
         None => return Ok(None),
-        Some(header_value) => header_value
+        Some(header_value) => header_value,
     };
     // println!("### get_user_id_from_auth_token: header_value = {:?}", header_value);
 
-    let header_value = header_value.to_str()
+    let header_value = header_value
+        .to_str()
         .context("The 'Authorization' header was not a valid UTF8 string.")?;
     // println!("### get_user_id_from_auth_token: header_value = {:?}", header_value);
     let token_segment = header_value

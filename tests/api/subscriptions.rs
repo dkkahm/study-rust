@@ -1,7 +1,9 @@
-use wiremock::{matchers::{method, path}, Mock, ResponseTemplate};
+use wiremock::{
+    matchers::{method, path},
+    Mock, ResponseTemplate,
+};
 
 use crate::helpers::spawn_app;
-
 
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
@@ -86,7 +88,6 @@ async fn subscribe_returns_200_for_valid_data() {
     assert_eq!(200, response.status().as_u16());
 }
 
-
 #[tokio::test]
 async fn subscribe_persists_the_new_subscriber() {
     let app = spawn_app().await;
@@ -145,7 +146,7 @@ async fn subscribe_fails_if_there_is_a_fatal_database_error() {
     let app = spawn_app().await;
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
-    sqlx::query!("ALTER TABLE subscriptions DROP COLUMN email;", )
+    sqlx::query!("ALTER TABLE subscriptions DROP COLUMN email;",)
         .execute(&app.db_pool)
         .await
         .unwrap();

@@ -1,6 +1,6 @@
 use actix_web::body::MessageBody;
 use aes::Aes256;
-use block_modes::{BlockMode, Cbc, block_padding::Pkcs7};
+use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
 use rand::Rng;
 use sha3::{Digest, Sha3_256};
 
@@ -20,7 +20,8 @@ pub fn encode_token(claim: &str) -> Result<String, anyhow::Error> {
 
     let token_secret = get_configuration()
         .map_err(|e| anyhow::anyhow!("{}", e))?
-        .application.token_secret;
+        .application
+        .token_secret;
 
     let token_salt = generate_token_salt();
     let encrypted_salt = encrypt_message_aes256(&hex::encode(token_salt), &token_secret)?;
@@ -34,14 +35,18 @@ pub fn encode_token(claim: &str) -> Result<String, anyhow::Error> {
     let hash = hex::encode(hash);
     token.push(':');
     token.push_str(&hash);
-    
+
     Ok(token)
 }
 
 pub fn get_claim_from_token(token: &str) -> Result<String, anyhow::Error> {
     let mut token_parts = token.rsplitn(2, ':');
-    let hash_in_token = token_parts.next().ok_or_else(|| anyhow::anyhow!("Invalid token format"))?;
-    let claim_and_salt_in_token = token_parts.next().ok_or_else(|| anyhow::anyhow!("Invalid token format"))?;
+    let hash_in_token = token_parts
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("Invalid token format"))?;
+    let claim_and_salt_in_token = token_parts
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("Invalid token format"))?;
 
     let mut hasher = Sha3_256::new();
     hasher.update(claim_and_salt_in_token.as_bytes());
@@ -53,12 +58,17 @@ pub fn get_claim_from_token(token: &str) -> Result<String, anyhow::Error> {
     }
 
     let mut claim_and_salt_parts_in_token = claim_and_salt_in_token.split(':');
-    let claim_in_token = claim_and_salt_parts_in_token.next().ok_or_else(|| anyhow::anyhow!("Invalid token format"))?;
-    let salt_in_token = claim_and_salt_parts_in_token.next().ok_or_else(|| anyhow::anyhow!("Invalid token format"))?;
+    let claim_in_token = claim_and_salt_parts_in_token
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("Invalid token format"))?;
+    let salt_in_token = claim_and_salt_parts_in_token
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("Invalid token format"))?;
 
     let token_secret = get_configuration()
         .map_err(|e| anyhow::anyhow!("{}", e))?
-        .application.token_secret;
+        .application
+        .token_secret;
 
     decrypt_message_aes256(&salt_in_token, &token_secret)?;
 
@@ -92,8 +102,8 @@ fn decrypt_message_aes256(ciphertext: &str, password: &str) -> Result<String, an
 
     let password = password.as_bytes();
 
-    let ciphertext_bytes = hex::decode(ciphertext.as_bytes())
-        .or_else(|e| Err(anyhow::anyhow!("{}", e)))?;
+    let ciphertext_bytes =
+        hex::decode(ciphertext.as_bytes()).or_else(|e| Err(anyhow::anyhow!("{}", e)))?;
 
     // Split the ciphertext into IV and ciphertext
     let (iv, ciphertext) = ciphertext_bytes.split_at(IV_SIZE);
@@ -111,7 +121,6 @@ fn decrypt_message_aes256(ciphertext: &str, password: &str) -> Result<String, an
     Ok(plaintext_str.to_string())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,11 +131,10 @@ mod tests {
         let password = "0123456789abcdef0123456789abcdef";
         let encypted_message = encrypt_message_aes256(claim, password).unwrap();
         let decrypted_message = decrypt_message_aes256(&encypted_message, password).unwrap();
-        
+
         // Assert
         assert_eq!(claim.to_string(), decrypted_message);
     }
-
 
     #[test]
     fn test_encode_and_decode_token() {
@@ -136,5 +144,5 @@ mod tests {
 
         // Assert
         assert_eq!(claim, claim_in_token);
-    }    
+    }
 }

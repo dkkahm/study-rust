@@ -25,13 +25,8 @@ impl ResponseError for TokenError {
     }
 }
 
-#[tracing::instrument(
-    name = "Test token",
-    skip(user_id),
-)]
-pub async fn token_test(
-    user_id: web::ReqData<UserId>
-) -> Result<HttpResponse, TokenError> {
+#[tracing::instrument(name = "Test token", skip(user_id))]
+pub async fn token_test(user_id: web::ReqData<UserId>) -> Result<HttpResponse, TokenError> {
     // println!("### token_test >>>");
     let user_id = user_id.into_inner();
     // println!("### token_test: user_id = {:?}", user_id);

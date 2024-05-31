@@ -1,9 +1,9 @@
 use actix_web::{http::StatusCode, web, HttpResponse, ResponseError};
+use anyhow::Context;
+use chrono::Utc;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
-use chrono::Utc;
-use anyhow::Context;
 
 use crate::{domain::NewSubscriber, email_client::EmailClient, startup::ApplicationBaseUrl};
 
@@ -28,14 +28,20 @@ pub async fn subcribe(
     base_url: web::Data<ApplicationBaseUrl>,
 ) -> Result<HttpResponse, SubscribeError> {
     let new_subscriber = form.0.try_into()?;
-    let mut transaction = pool.begin().await
+    let mut transaction = pool
+        .begin()
+        .await
         .context("Failed to acquire a Postgres connection from the pool")?;
-    let subscriber_id = insert_subcriber(&mut transaction, &new_subscriber).await
+    let subscriber_id = insert_subcriber(&mut transaction, &new_subscriber)
+        .await
         .context("Failed to insert new subscriber in the database")?;
     let subscriber_token = generate_subscription_token();
-    store_token(&mut transaction, subscriber_id, &subscriber_token).await
+    store_token(&mut transaction, subscriber_id, &subscriber_token)
+        .await
         .context("Failed to store the confirmation token for a new subscriber")?;
-    transaction.commit().await
+    transaction
+        .commit()
+        .await
         .context("Failed to commit SQL transaction to store a new subscriber")?;
     send_confirmation_email(
         &email_client,
@@ -50,7 +56,7 @@ pub async fn subcribe(
 
 #[tracing::instrument(
     name = "Saving new subscriber details in the database",
-    skip(new_subscriber, transaction),
+    skip(new_subscriber, transaction)
 )]
 pub async fn insert_subcriber(
     transaction: &mut Transaction<'_, Postgres>,
@@ -74,12 +80,12 @@ pub async fn insert_subcriber(
 
 #[tracing::instrument(
     name = "Store a subscription token in the database",
-    skip(subscription_token, transaction),
+    skip(subscription_token, transaction)
 )]
 pub async fn store_token(
     transaction: &mut Transaction<'_, Postgres>,
     subscriber_id: Uuid,
-    subscription_token: &str
+    subscription_token: &str,
 ) -> Result<(), StoreTokenError> {
     sqlx::query!(
         r#"
@@ -91,9 +97,7 @@ pub async fn store_token(
     )
     .execute(&mut **transaction)
     .await
-    .map_err(|e| {
-        StoreTokenError(e)
-    })?;
+    .map_err(|e| StoreTokenError(e))?;
     Ok(())
 }
 
@@ -107,8 +111,10 @@ pub async fn send_confirmation_email(
     base_url: &str,
     subscription_token: &str,
 ) -> Result<(), reqwest::Error> {
-    let confirmation_link = format!("{}/subscriptions/confirm?subscription_token={}",
-        base_url, subscription_token);
+    let confirmation_link = format!(
+        "{}/subscriptions/confirm?subscription_token={}",
+        base_url, subscription_token
+    );
     let plain_body = format!(
         "Welcome to our newsletter!\nVisit {} to confirm your subscription.",
         confirmation_link
@@ -120,12 +126,7 @@ pub async fn send_confirmation_email(
     );
 
     email_client
-        .send_email(
-            &new_subscriber.email,
-            "Welcome!",
-            &html_body,
-            &plain_body,
-        )
+        .send_email(&new_subscriber.email, "Welcome!", &html_body, &plain_body)
         .await
 }
 

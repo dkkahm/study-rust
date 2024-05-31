@@ -59,7 +59,7 @@ mod tests {
             Self(email)
         }
     }
-    
+
     #[quickcheck_macros::quickcheck]
     fn valid_emails_are_parsed_successfully(valid_email: ValidEmailFixture) -> bool {
         SubscriberEmail::parse(valid_email.0).is_ok()

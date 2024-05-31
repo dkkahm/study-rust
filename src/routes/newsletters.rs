@@ -3,8 +3,8 @@ use anyhow::Context;
 use base64::prelude::*;
 use secrecy::Secret;
 
-use crate::{domain::SubscriberEmail, email_client::EmailClient};
 use crate::authentication::{basic_authentication, validate_credentials, AuthError, Credentials};
+use crate::{domain::SubscriberEmail, email_client::EmailClient};
 
 #[derive(thiserror::Error, Debug)]
 pub enum PublishError {
@@ -32,13 +32,13 @@ impl ResponseError for PublishError {
 #[derive(serde::Deserialize)]
 pub struct BodyData {
     title: String,
-    content: Content
+    content: Content,
 }
 
 #[derive(serde::Deserialize)]
 pub struct Content {
     html: String,
-    text: String
+    text: String,
 }
 
 #[tracing::instrument(
@@ -95,19 +95,19 @@ async fn get_confirmed_subscribers(
     pool: &sqlx::PgPool,
 ) -> Result<Vec<Result<ConfirmedSubscriber, anyhow::Error>>, anyhow::Error> {
     let confirmed_subscribers = sqlx::query!(
-            r#"
+        r#"
             SELECT email
             FROM subscriptions
             WHERE status = 'confirmed'
             "#,
-        )
-        .fetch_all(pool)
-        .await?
-        .into_iter()
-        .map(|r| match SubscriberEmail::parse(r.email) {
-            Ok(email) => Ok(ConfirmedSubscriber { email }),
-            Err(error) => Err(anyhow::anyhow!(error)),
-        })
-        .collect();
+    )
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(|r| match SubscriberEmail::parse(r.email) {
+        Ok(email) => Ok(ConfirmedSubscriber { email }),
+        Err(error) => Err(anyhow::anyhow!(error)),
+    })
+    .collect();
     Ok(confirmed_subscribers)
 }

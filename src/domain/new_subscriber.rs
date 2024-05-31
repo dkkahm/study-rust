@@ -1,7 +1,7 @@
 use crate::routes::FormData;
 
-use super::SubscriberName;
 use super::SubscriberEmail;
+use super::SubscriberName;
 
 pub struct NewSubscriber {
     pub email: SubscriberEmail,

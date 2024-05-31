@@ -19,31 +19,28 @@ pub struct Credentials {
     pub password: Secret<String>,
 }
 
-#[tracing::instrument(
-    name = "Get stored credentials",
-    skip(username, pool)
-)]
-pub async fn get_stored_credentials(username: &str, pool: &sqlx::PgPool) -> Result<Option<(Uuid, Secret<String>)>, anyhow::Error> {
+#[tracing::instrument(name = "Get stored credentials", skip(username, pool))]
+pub async fn get_stored_credentials(
+    username: &str,
+    pool: &sqlx::PgPool,
+) -> Result<Option<(Uuid, Secret<String>)>, anyhow::Error> {
     let row = sqlx::query!(
-            r#"
+        r#"
             SELECT user_id, password_hash
             FROM users
             WHERE username = $1
             "#,
-            username
-        )
-        .fetch_optional(pool)
-        .await
-        .context("Failed to perform a query to retrieve stored credentials.")?
-        .map(|row| (row.user_id, Secret::new(row.password_hash)));
+        username
+    )
+    .fetch_optional(pool)
+    .await
+    .context("Failed to perform a query to retrieve stored credentials.")?
+    .map(|row| (row.user_id, Secret::new(row.password_hash)));
 
     Ok(row)
 }
 
-#[tracing::instrument(
-    name = "Validate credentials",
-    skip(credentials, pool)
-)]
+#[tracing::instrument(name = "Validate credentials", skip(credentials, pool))]
 pub async fn validate_credentials(
     credentials: Credentials,
     pool: &sqlx::PgPool,
@@ -53,7 +50,7 @@ pub async fn validate_credentials(
         "$argon2id$v=19$m=19456,t=2,p=1$v7KPws3hMyOR3j6XeIE5zQ$Y+RravRQ7MWEt2oKNTpBygeSDUO/W+fvDyxh7AhG430".to_string()
     );
 
-    if let Some((stored_user_id, stored_password_hash)) = 
+    if let Some((stored_user_id, stored_password_hash)) =
         get_stored_credentials(&credentials.username, pool)
             .await
             .map_err(AuthError::UnexpectedError)?
@@ -62,14 +59,14 @@ pub async fn validate_credentials(
         expected_password_hash = stored_password_hash;
     }
 
-    spawn_blocking_with_tracing(move || verify_password_hash(expected_password_hash, credentials.password))
-        .await
-        .context("Failed to spawn blocking task.")
-        .map_err(AuthError::UnexpectedError)??;
-
-    user_id.ok_or_else(|| {
-        AuthError::AuthError(anyhow::anyhow!("Unknown username."))
+    spawn_blocking_with_tracing(move || {
+        verify_password_hash(expected_password_hash, credentials.password)
     })
+    .await
+    .context("Failed to spawn blocking task.")
+    .map_err(AuthError::UnexpectedError)??;
+
+    user_id.ok_or_else(|| AuthError::AuthError(anyhow::anyhow!("Unknown username.")))
 }
 
 #[tracing::instrument(
@@ -86,7 +83,8 @@ fn verify_password_hash(
 
     Argon2::default()
         .verify_password(
-            password_candidate.expose_secret().as_bytes(), &expected_password_hash
+            password_candidate.expose_secret().as_bytes(),
+            &expected_password_hash,
         )
         .context("Invalid password.")
         .map_err(AuthError::AuthError)

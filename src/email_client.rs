@@ -17,16 +17,13 @@ impl EmailClient {
         authorization_token: Secret<String>,
         timeout: std::time::Duration,
     ) -> Self {
-        let http_client = Client::builder()
-            .timeout(timeout)
-            .build()
-            .unwrap();
+        let http_client = Client::builder().timeout(timeout).build().unwrap();
 
         Self {
             http_client,
             base_url,
             sender,
-            authorization_token
+            authorization_token,
         }
     }
 
@@ -39,15 +36,18 @@ impl EmailClient {
     ) -> Result<(), reqwest::Error> {
         let url = format!("{}/email", self.base_url);
         let request_body = SendEmailRequest {
-            from : self.sender.as_ref(),
-            to : recipient.as_ref(),
-            subject : subject,
-            html_body : html_content,
-            text_body : text_content,
+            from: self.sender.as_ref(),
+            to: recipient.as_ref(),
+            subject: subject,
+            html_body: html_content,
+            text_body: text_content,
         };
         self.http_client
             .post(&url)
-            .header("X-Postmark-Server-Token", self.authorization_token.expose_secret())
+            .header(
+                "X-Postmark-Server-Token",
+                self.authorization_token.expose_secret(),
+            )
             .json(&request_body)
             .send()
             .await?
@@ -63,12 +63,12 @@ struct SendEmailRequest<'a> {
     to: &'a str,
     subject: &'a str,
     html_body: &'a str,
-    text_body: &'a str
+    text_body: &'a str,
 }
 
 #[cfg(test)]
 mod tests {
-    use claim::{assert_ok, assert_err};
+    use claim::{assert_err, assert_ok};
     use fake::Faker;
     use fake::{faker::internet::en::SafeEmail, Fake};
     use secrecy::Secret;
@@ -114,7 +114,6 @@ mod tests {
             std::time::Duration::from_millis(200),
         )
     }
-
 
     #[tokio::test]
     async fn send_email_sends_the_expected_request() {
@@ -177,8 +176,7 @@ mod tests {
         let mock_server = MockServer::start().await;
         let email_client = email_client(mock_server.uri());
 
-        let response = ResponseTemplate::new(200)
-            .set_delay(std::time::Duration::from_secs(180));
+        let response = ResponseTemplate::new(200).set_delay(std::time::Duration::from_secs(180));
         Mock::given(any())
             .respond_with(response)
             .expect(1)
